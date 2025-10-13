@@ -38,6 +38,8 @@ class Activation(nn.Module):
             self.activation = gated_activation
         elif activation_func == 'relu':
             self.activation = F.relu
+        elif activation_func=='leakyrelu':
+            self.activation= nn.LeakyReLU(0.1)
 
     def forward(self, input):
         return self.activation(input)
