@@ -25,7 +25,7 @@ import h5py
 class build_dataset(Dataset):
     def __init__(self, configs):
         np.random.seed(configs.dataset_seed)
-        self.samples = np.load('training_samples/water.npy', allow_pickle=True)[:100]
+        self.samples = np.load('training_samples/water.npy', allow_pickle=True)
 
         self.samples_identity = np.load('training_samples/water_identity.npy', allow_pickle=True)
 
@@ -485,3 +485,4 @@ def log_input_stats(configs, experiment, input_analysis):
 
 def standardize(data):
     return (data - np.mean(data)) / np.sqrt(np.var(data))
+
