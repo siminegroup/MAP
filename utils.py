@@ -1,5 +1,5 @@
 # metrics to determine the performance of our learning algorithm
-from comet_ml import Experiment
+
 import numpy as np
 import torch.nn.functional as F
 import os
@@ -12,9 +12,7 @@ import pickle
 import sys
 import tqdm
 from tqdm import tqdm as barthing
-from accuracy_metrics import *
 from models import *
-from Image_Processing_Utils import *
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -27,29 +25,26 @@ import h5py
 class build_dataset(Dataset):
     def __init__(self, configs):
         np.random.seed(configs.dataset_seed)
-        if configs.training_dataset == '3d-idealgas':
-            self.samples = np.load('data/hard_sphere_gas_1000.npy', allow_pickle=True)
-        elif configs.training_dataset == '3d-toy-model':
-            self.samples = np.load('data/water.npy', allow_pickle=True)
+        self.samples = np.load('training_samples/water.npy', allow_pickle=True)[:100]
 
-            self.samples_identity = np.load('data/water_identity.npy', allow_pickle=True)
+        self.samples_identity = np.load('training_samples/water_identity.npy', allow_pickle=True)
 
         #self.samples= self.samples[0:300]
-        self.samples = transform_data_2(self.samples,self.samples_identity)
-       # self.samples=self.samples[:,32:,32:,32:]
+        self.samples = transform_data(self.samples,self.samples_identity)###voxelize data
         self.samples = np.expand_dims(self.samples, axis=1)
         self.num_conditioning_variables = self.samples.shape[1] - 1
         assert self.samples.ndim == 5
         
-        ##### Data Augmentation
+        ##### Data Augmentation,
         self.samples=np.concatenate((self.samples[:,:,0:40,0:40,0:40],self.samples[:,:,40:,40:,40:],self.samples[:,:,40:,0:40,0:40],self.samples[:,:,0:40,40:,0:40],self.samples[:,:,0:40,0:40,40:],self.samples[:,:,0:40,40:,40:],self.samples[:,:,40:,0:40,40:],self.samples[:,:,40:,40:,0:40]))
+        ### not all of these augmentation are needed really
         rot=np.rot90(self.samples.copy(),k=1,axes=(2,3))
         rot2=np.rot90(self.samples.copy(),k=2,axes=(2,3))
         rot3=np.rot90(self.samples.copy(),k=1,axes=(2,4))
         rot4=np.rot90(self.samples.copy(),k=2,axes=(2,4))
         rot5=np.rot90(self.samples.copy(),k=1,axes=(3,4))
         rot6=np.rot90(self.samples.copy(),k=2,axes=(3,4))
-        self.samples = np.concatenate((self.samples, rot,rot2,rot3,rot4,rot5,rot6), axis=0)
+        self.samples = np.concatenate((self.samples, rot,rot2,rot3), axis=0) 
         
         np.random.shuffle(self.samples)
         self.dataDims = {
@@ -264,13 +259,13 @@ def auto_convergence(configs, epoch, tr_err_hist, te_err_hist):
     # set convergence criteria
     # if the test error has increased on average for the last x epochs
     # or if the training error has decreased by less than 1% for the last x epochs
-    #train_margin = .000001  # relative change over past x runs
+    train_margin = .000001  # relative change over past x runs
     # or if the training error is diverging from the test error by more than 20%
     test_margin = 10 # max divergence between training and test losses
-    # configs.convergence_moving_average_window - the time over which we will average loss in order to determine convergence
+    configs.convergence_moving_average_window #the time over which we will average loss in order to determine convergence
     converged = 0
     if epoch > configs.convergence_moving_average_window:
-        print('hi')
+     
         window = configs.convergence_moving_average_window
         tr_mean, te_mean = [torch.mean(torch.stack(tr_err_hist[-configs.convergence_moving_average_window:])), torch.mean(torch.stack(te_err_hist[-configs.convergence_moving_average_window:]))]
         print([tr_mean,tr_err_hist[-window],configs.convergence_margin,te_mean])
@@ -368,114 +363,16 @@ def generation(configs, dataDims, model):
 
     sample, time_ge = generate_samples_gated(configs, dataDims, model)  # generate samples
 
-    np.save('samples/run_{}_samples128'.format(configs.run_num), sample)
+    np.save('samples/run_{}'.format(configs.run_num), sample)
 
     if len(sample) != 0:
         print('Generated samples')
-
-        #output_analysis = analyse_samples(sample)
-
-        #agreements = compute_accuracy(configs, dataDims, input_analysis, output_analysis)
-        total_agreement = 0
-       # for i, j, in enumerate(agreements.values()):
-        #    if np.isnan(j) != 1: # kill NaNs
-         #       total_agreement += float(j)
-
-        #total_agreement /= len(agreements)
-
-        #print('tot = {:.4f}; den={:.2f};time_ge={:.1f}s'.format(total_agreement, agreements['density'], time_ge))
-        return sample, time_ge#, agreements, output_analysis
+        return sample, time_ge
 
     else:
         print('Sample Generation Failed!')
         return 0, 0, 0, 0
 
-
-def analyse_inputs(configs, dataDims):
-    dataset = torch.Tensor(build_dataset(configs))  # get data
-    np.random.seed(configs.dataset_seed)
-    #if configs.training_dataset == '3d-idealgas':
-       # samples = np.load('data/output_raw.npy', allow_pickle=True)
-        #samples = np.expand_dims(samples, axis=1)
-    dataset = dataset * (dataDims['classes'])-1
-    dataset = dataset[0:10]
-    input_analysis = analyse_samples(dataset)
-    input_analysis['training samples'] = dataset[0:10,0]
-
-    return input_analysis
-
-
-def analyse_samples(sample):
-    sample = sample.squeeze(1)
-    #particles_code = 2#int(torch.median(sample))
-    #sample = sample==particles # analyze binary space
-    #avg_density = torch.mean((sample).type(torch.float32)) # for A
-    #sum = torch.sum(sample)
-    #sample = np.concatenate(sample, axis=0)
-    print(sample.shape)
-    for i in range(len(sample)):
-        xrange_list = []
-        yrange_list = []
-        zrange_list = []
-        for j in range(sample.shape[3]):
-            for k in range(sample.shape[2]):
-                for m in range(sample.shape[1]):
-                    if sample[i, j, k, m] == 1:
-                        xrange_list.append(j)
-                        yrange_list.append(k)
-                        zrange_list.append(m)
-    xrange = max(xrange_list) - min(xrange_list)
-    yrange = max(yrange_list) - min(yrange_list)
-    zrange = max(zrange_list) - min(zrange_list)
-    print([xrange, yrange, zrange])
-
-    maxrange = max(xrange, yrange, zrange)
-
-    correlationrange = maxrange / 3
-    dr = .5
-    exdens = []
-    list_corr = []
-    list_rcorr = []
-
-    rho = 0.0078
-
-    for i in range(len(sample)):
-        exdens.append(density(sample[i]))
-
-        corr, rcorr = (paircorrelation3d_lattice(sample[i], 10, correlationrange, dr, rho))
-        list_corr.append(corr)
-        list_rcorr.append(rcorr)
-
-    sample_analysis = {}
-    sample_analysis['density'] = torch.mean(torch.stack(exdens)).item()
-    # sample_analysis['sum'] = sum
-    # sample_analysis['correlation3d'] = exradialcorr
-    sample_analysis['radial correlation'] = sum(list_corr) / len(list_corr)
-    sample_analysis['correlation bins'] = sum(list_rcorr) / len(list_rcorr)
-    #  sample_analysis['fourier2d'] = fourier2d
-    #   sample_analysis['radial fourier'] = radial_fourier
-    #   sample_analysis['fourier bins'] = fourier_bins
-    return sample_analysis
-
-def compute_accuracy(configs, dataDims, input_analysis, output_analysis):
-
-    #input_xdim, input_ydim, sample_xdim, sample_ydim = [input_analysis['fourier2d'].shape[-1], input_analysis['fourier2d'].shape[-2], output_analysis['fourier2d'].shape[-1], output_analysis['fourier2d'].shape[-2]]
-
-    #input_xdim, input_ydim, sample_xdim, sample_ydim = [input_analysis['correlation2d'].shape[-1], input_analysis['correlation2d'].shape[-2], output_analysis['correlation2d'].shape[-1], output_analysis['correlation2d'].shape[-2]]
-    #if configs.sample_outpaint_ratio > 1: # shrink inputs to meet outputs or vice-versa
-    #    x_difference = sample_xdim-input_xdim
-    #    y_difference = sample_ydim-input_ydim
-    #   output_analysis['correlation2d'] = output_analysis['correlation2d'][y_difference//2:-y_difference//2, x_difference//2:-x_difference//2]
-    #elif configs.sample_outpaint_ratio < 1:
-    #    x_difference = input_xdim - sample_xdim
-    #    y_difference = input_ydim- sample_ydim
-    #    input_analysis['correlation2d'] = input_analysis['correlation2d'][y_difference // 2:-y_difference // 2, x_difference // 2:-x_difference // 2]
-
-    agreements = {}
-    agreements['density'] = np.amax((1 - np.abs(input_analysis['density'] - output_analysis['density']) / input_analysis['density'],0))
-    #agreements['correlation'] = np.amax((1 - np.sum(np.abs(input_analysis['correlation2d'] - output_analysis['correlation2d'])) / (np.sum(input_analysis['correlation2d']) + 1e-8),0))
-
-    return agreements
 
 
 def save_ckpt(epoch, net, optimizer, dir_name):
@@ -535,23 +432,21 @@ def rolling_mean(input, run):
     return output
 
 
-def transform_data(sample):
+#def transform_data(sample):
 
-    newdata = np.zeros((sample.shape[0], 90, 90, 90))
-    for i in range(0, sample.shape[0]):
-        for j in range(0, sample.shape[1]):
+#    newdata = np.zeros((sample.shape[0], 90, 90, 90))
+#    for i in range(0, sample.shape[0]):
+#        for j in range(0, sample.shape[1]):
                 #print([i,j,int((sample[i + 1, j, 2])/ 0.08), int((sample[i + 1, j, 1])/ 0.08), int((sample[i + 1, j, 0])/ 0.08)])
 
-                newdata[i, int((sample[i , j, 2])/ 0.2), int((sample[i, j, 1])/ 0.2), int((sample[i , j, 0])/ 0.2)] = 1
-    return newdata
+#                newdata[i, int((sample[i , j, 2])/ 0.2), int((sample[i, j, 1])/ 0.2), int((sample[i , j, 0])/ 0.2)] = 1
+#    return newdata
 
-def transform_data_2(sample,sample_identity):
+def transform_data(sample,sample_identity):
 
     newdata = np.zeros((sample.shape[0], 80, 80, 80))
     for i in range(0, len(sample)):
         for j in range(0, sample.shape[1]):
-                #print([i,j,int((sample[i + 1, j, 2])/ 0.08), int((sample[i + 1, j, 1])/ 0.08), int((sample[i + 1, j, 0])/ 0.08)])
-
                 if np.isnan(sample[i,j,:]).any() == False and sum(sample[i,j,:]>100)<1:
                    if sample_identity[i,j]=='H':
 
@@ -559,43 +454,8 @@ def transform_data_2(sample,sample_identity):
                    if sample_identity[i,j] == 'O':
                         newdata[i, int((sample[i, j, 2]) / 0.25), int((sample[i, j, 1]) / 0.25), int((sample[i, j, 0]) / 0.25)] = 2
     return newdata
-#
 
 
-def transform_data_3(sample):
-
-    newdata = np.zeros((sample.shape[0],32,32,32))
-    for i in range(0, len(sample)):
-        for j in range(0, sample.shape[1]):
-                #print([i,j,int((sample[i + 1, j, 2])/ 0.08), int((sample[i + 1, j, 1])/ 0.08), int((sample[i + 1, j, 0])/ 0.08)])
-
-                if np.isnan(sample[i,j,:]).any() == False:
-
-
-                    newdata[i, int((sample[i , j, 2])/ 0.25), int((sample[i, j, 1])/0.25 ), int((sample[i , j, 0])/0.25)] = 1
-    return newdata
-
-
-def get_comet_experiment(configs):
-    if configs.comet:
-        # Create an experiment with your api key
-        experiment = Experiment(
-            api_key="WdZXLSYozVLDkUZWGfcLPj1pu",
-            project_name="wled",
-            workspace="ata-madanchi",
-        )
-        experiment.set_name(configs.experiment_name + str(configs.run_num))
-        experiment.log_metrics(configs.__dict__)
-        experiment.log_others(configs.__dict__)
-        if configs.experiment_name[-1] == '_':
-            tag = configs.experiment_name[:-1]
-        else:
-            tag = configs.experiment_name
-        experiment.add_tag(tag)
-    else:
-        experiment = None
-
-    return experiment
 
 
 def superscale_image(image, f = 1):
