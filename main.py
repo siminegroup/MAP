@@ -29,7 +29,7 @@ add_bool_arg(parser, 'auto_training_batch', default = True) # whether to automat
 parser.add_argument('--max_epochs', type = int, default = 80) # number of epochs over which to train
 parser.add_argument('--convergence_moving_average_window', type = int, default = 100) # moving average window used to compute convergence criteria
 parser.add_argument('--max_dataset_size', type = int, default = 400000) # maximum dataset size (limited by size of actual dataset)
-parser.add_argument('--convergence_margin', type = float, default = 1e-2) # cutoff which determines when the model has converged
+parser.add_argument('--convergence_margin', type = float, default = 1e-4) # cutoff for convergence and dataset dependent
 parser.add_argument('--dataset_seed', type = int, default = 0)
 parser.add_argument('--model_seed', type = int, default = 0)
 parser.add_argument('--fc_dropout_probability', type = float, default = 0.21) # dropout probability on hidden FC layer(s) [0,1)
