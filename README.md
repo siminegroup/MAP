@@ -9,4 +9,5 @@ All required packages are listed in the requirements.txt file. The dataset is pr
 you can find the 2D implementations here:
 
 https://github.com/InfluenceFunctional/GatedPixelCNN_v1
+
 https://github.com/InfluenceFunctional/weld_net
