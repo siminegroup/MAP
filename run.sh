@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=ur account
-#SBATCH --mem-per-gpu=40G
+#SBATCH --mem-per-gpu=100G
 #SBATCH --gres=gpu:1
 #SBATCH --time=0-120:00
 #SBATCH --array=0
@@ -17,3 +17,4 @@ echo "MASTER_ADDR="$MASTER_ADDR
 
 
 python ./main.py --run_num=$SLURM_ARRAY_TASK_ID
+
