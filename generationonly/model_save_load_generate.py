@@ -3,14 +3,16 @@ import pickle
 import time
 import tqdm
 import json
+import argparse
 from torch import nn, optim
 from models import *
+
 a_file = open("datadims.pkl","rb")
 
 dataDims = pickle. load(a_file)
 
-import argparse
-import json
+
+
 def transform_data_2(sample,sample_identity):
 
     newdata = np.zeros((sample.shape[0], 80, 80, 80))
@@ -59,12 +61,11 @@ configs, unknown = parser.parse_known_args()
 
 
 model = GatedPixelCNN(configs,dataDims)
-device = torch.device('cuda:0')
-model.eval()
-model.to(torch.device("cuda:0"))
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
 
-optimizer = optim.AdamW(model.parameters(),amsgrad=True) #optimizer = optim.AdamW(model.parameters(),amsgrad=True)
-checkpoint = torch.load('model-16.pt', map_location=device)
+#optimizer =  optim.SGD(model.parameters(),lr=1e-2, momentum=0.9, nesterov=True) #optimizer = optim.AdamW(model.parameters(),amsgrad=True)
+checkpoint = torch.load('model-15.pt', map_location=device)
 bc_old=checkpoint['model_state_dict']
 bc_new=bc_old.copy()
 for items in bc_old.items():
@@ -73,8 +74,7 @@ for items in bc_old.items():
    
     bc_new[s2] = bc_new.pop(s1)
 model.load_state_dict(bc_new)
-optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
 if configs.sample_generation_mode == 'serial':
     time_ge = time.time()
@@ -134,19 +134,17 @@ if configs.sample_generation_mode == 'serial':
                         out = model(sample_batch[:, :, k - dataDims['conv field'] - 2:k + 1,
                                     j - dataDims['conv field'] - 1:j + dataDims['conv field'] * (1 - 0) + 1,
                                     i - dataDims['conv field']:i + dataDims['conv field'] + 1].cuda())
-                       # print([k + 1,j + dataDims['conv field'] * (1 - 0) + 1,i + dataDims['conv field'] + 1])
                         out = torch.reshape(out, (
                             out.shape[0], dataDims['classes'] + 1, dataDims['channels'], out.shape[-3],
                             out.shape[-2],
                             out.shape[-1]))  # reshape to select channels
-                        # print(out.shape)
                         probs = F.softmax(out[:, 1:, 0, -1, -dataDims['conv field'] - 1, dataDims['conv field']],
                                           dim=1).data  # the remove the lowest element (boundary)
 
-                        #  print(sample_batch.shape)
+
                         sample_batch[:, 0, k, j, i] = (torch.multinomial(probs, 1).float() + 1).squeeze(1) / \
                                                       dataDims['classes']  # convert output back to training space
-                     #   print([k,j,i])
+
                         del out, probs
 
         print('check')
