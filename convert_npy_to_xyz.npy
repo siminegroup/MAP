@@ -1,4 +1,5 @@
 #### convert generated samples to xyz, pay attention to how transformed_data function in utils is reflected in the coordinates and identities
+#sample=np.load()
 for z in range(0, sample.shape[0]):
     with open(f'sample{z}.xyz', 'w') as f:
             xcoords = np.array([])
