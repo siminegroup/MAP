@@ -1,0 +1,22 @@
+#### convert generated samples to xyz, pay attention to how transformed_data function in utils is reflected in the coordinates and identities
+for z in range(0, sample.shape[0]):
+    with open(f'sample{z}.xyz', 'w') as f:
+            xcoords = np.array([])
+            ycoords = np.array([])
+            zcoords = np.array([])
+
+            f.write(str(np.sum(sample[z,]!=0)))
+            f.write('\n')
+            f.write('\n')
+
+            for i in range(0, sample.shape[2]): 
+                for j in range(0, sample.shape[3]): 
+                    for k in range(0, sample.shape[4]): 
+                        if sample[z, 0, i, j, k] == 2:
+
+                                f.write(f"O {k * 0.25:.3f} {j * 0.25:.3f} {i * 0.25:.3f}\n")
+                       
+                        if sample[z, 0, i, j, k] == 1:
+
+                                f.write(f"H {k * 0.25:.3f} {j * 0.25:.3f} {i * 0.25:.3f}\n")
+                     
