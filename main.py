@@ -18,7 +18,7 @@ parser.add_argument('--experiment_name', type = str, default = 'testing')
 parser.add_argument('--model', type = str, default = 'gated1') # model architecture -- 'gated1'
 parser.add_argument('--conv_filters', type = int, default = 20)
 parser.add_argument('--conv_size', type = int, default = 3)
-parser.add_argument('--conv_layers', type = int, default =20)
+parser.add_argument('--conv_layers', type = int, default =20) # number of layers,  context size (from g(r) plateau) / voxel size (set in transform_data, utils)
 parser.add_argument('--dilation', type = int, default = 1) # must be 1 - greater than 1 is deprecated
 parser.add_argument('--activation_function', type = str, default = 'relu') # 'gated' is only working option for 'gated1' model
 
