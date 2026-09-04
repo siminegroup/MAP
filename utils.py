@@ -47,6 +47,7 @@ class build_dataset(Dataset):
         self.samples = np.concatenate((self.samples, rot,rot2,rot3), axis=0) 
         
         np.random.shuffle(self.samples)
+		self.samples = self.samples[:configs.max_dataset_size]
         self.dataDims = {
             'classes' : len(np.unique(self.samples)),
             'input x dim' : self.samples.shape[-1],
